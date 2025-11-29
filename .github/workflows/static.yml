@@ -1,0 +1,177 @@
+import { useState, useEffect } from "react";
+import { CalendarDoor } from "@/components/CalendarDoor";
+import { StoryModal } from "@/components/StoryModal";
+import { INITIAL_STORIES, Story, STORAGE_KEY } from "@/data/stories";
+import { useToast } from "@/hooks/use-toast";
+import { Heart, Snowflake } from "lucide-react";
+import { differenceInDays } from "date-fns";
+
+// Set your advent calendar start date here (YYYY-MM-DD)
+const ADVENT_START_DATE = new Date("2025-12-01");
+
+const Index = () => {
+  // Calculate which day should be available based on current date
+  const getCurrentAvailableDay = () => {
+    const today = new Date();
+    const daysPassed = differenceInDays(today, ADVENT_START_DATE);
+    return Math.max(1, Math.min(daysPassed + 1, 32)); // Between 1 and 32
+  };
+
+  const [stories, setStories] = useState<Story[]>(() => {
+    // Load saved progress from localStorage
+    const saved = localStorage.getItem(STORAGE_KEY);
+    const currentDay = getCurrentAvailableDay();
+    
+    if (saved) {
+      try {
+        const savedStories = JSON.parse(saved);
+        // Unlock stories up to current day
+        return savedStories.map((s: Story) => ({
+          ...s,
+          unlocked: s.day <= currentDay
+        }));
+      } catch (e) {
+        return INITIAL_STORIES.map(s => ({
+          ...s,
+          unlocked: s.day <= currentDay
+        }));
+      }
+    }
+    return INITIAL_STORIES.map(s => ({
+      ...s,
+      unlocked: s.day <= currentDay
+    }));
+  });
+
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { toast } = useToast();
+
+  // Save to localStorage whenever stories change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stories));
+  }, [stories]);
+
+  const handleDoorClick = (day: number) => {
+    const story = stories.find(s => s.day === day);
+    if (!story) return;
+
+    const currentAvailableDay = getCurrentAvailableDay();
+
+    if (!story.unlocked || day > currentAvailableDay) {
+      // Show locked message
+      setSelectedStory(story);
+      setIsModalOpen(true);
+      
+      const daysUntilUnlock = day - currentAvailableDay;
+      toast({
+        title: "This chapter is locked! 🔒",
+        description: daysUntilUnlock > 0 
+          ? `This story will unlock in ${daysUntilUnlock} day${daysUntilUnlock > 1 ? 's' : ''}!`
+          : `Read Day ${day - 1} first to unlock this story.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedStory(story);
+    setIsModalOpen(true);
+  };
+
+  const getDoorState = (story: Story): "locked" | "unlocked" | "viewed" => {
+    if (!story.unlocked) return "locked";
+    return "unlocked";
+  };
+
+  return (
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-10 left-10 text-pine">
+          <Snowflake className="w-32 h-32 animate-spin" style={{ animationDuration: '20s' }} />
+        </div>
+        <div className="absolute bottom-20 right-20 text-pine">
+          <Snowflake className="w-24 h-24 animate-spin" style={{ animationDuration: '15s' }} />
+        </div>
+        <div className="absolute top-1/2 left-1/3 text-pine">
+          <Heart className="w-16 h-16 animate-pulse" />
+        </div>
+      </div>
+
+      <main className="relative z-10 container max-w-7xl mx-auto px-4 py-8 md:py-12">
+        {/* Header */}
+        <header className="text-center mb-12 space-y-4">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-sans font-bold text-pine leading-tight">
+            Advent Calendar for<br />
+            <span className="text-ruby">My Christmas Cake</span>
+          </h1>
+          <p className="text-lg md:text-xl text-muted-foreground font-serif italic">
+            32 Days of Interconnected London Love Stories
+          </p>
+          <div className="flex items-center justify-center gap-2 text-pine">
+            <Heart className="w-5 h-5 fill-ruby text-ruby" />
+            <Heart className="w-5 h-5 fill-ruby text-ruby" />
+            <Heart className="w-5 h-5 fill-ruby text-ruby" />
+          </div>
+        </header>
+
+        {/* Progress indicator */}
+        <div className="mb-8 text-center space-y-3">
+          <div className="inline-block bg-card rounded-full px-6 py-3 shadow-soft border border-pine/10">
+            <p className="text-sm font-sans font-semibold text-pine">
+              📖 Stories Available: <span className="text-ruby">{getCurrentAvailableDay()}</span> / 32
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            ⏰ New story unlocks each day at midnight
+          </p>
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4 mb-12">
+          {stories.map((story) => (
+            <CalendarDoor
+              key={story.day}
+              day={story.day}
+              state={getDoorState(story)}
+              onClick={() => handleDoorClick(story.day)}
+            />
+          ))}
+        </div>
+
+        {/* Instructions */}
+        <div className="max-w-2xl mx-auto bg-card rounded-2xl p-6 md:p-8 shadow-elevated border border-pine/10">
+          <h2 className="text-2xl font-sans font-bold text-pine mb-4 flex items-center gap-2">
+            <span>✨</span> How to Play
+          </h2>
+          <ol className="space-y-3 text-pine font-serif">
+            <li className="flex gap-3">
+              <span className="font-bold text-ruby font-sans">1.</span>
+              <span>One new story unlocks each day at midnight</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-bold text-ruby font-sans">2.</span>
+              <span>Click on an unlocked door (golden) to read that day's story</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-bold text-ruby font-sans">3.</span>
+              <span>Follow Emma's journey through 32 days of London love stories!</span>
+            </li>
+          </ol>
+          <p className="mt-4 text-sm text-muted-foreground italic">
+            💡 Stories unlock based on the calendar date. Come back tomorrow for the next chapter!
+          </p>
+        </div>
+      </main>
+
+      {/* Story Modal */}
+      <StoryModal
+        story={selectedStory}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </div>
+  );
+};
+
+export default Index;
